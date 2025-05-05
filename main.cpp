@@ -22,6 +22,7 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <fstream>
+#include <random>
 
 #include "Util.h"
 #include "sphere/SphereHandler.h"
@@ -170,6 +171,19 @@ void main() {
             float currentTime = glfwGetTime();
             float deltaTime = currentTime - lastTime;
             lastTime = currentTime;
+
+            // Handle keyboard input
+            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
+                glfwSetWindowShouldClose(window, true);
+            }
+            if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS) {
+                // Add a new sphere with random color
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_real_distribution<float> colorDist(0.0f, 1.0f);
+                glm::vec3 color(colorDist(gen), colorDist(gen), colorDist(gen));
+                sphereHandler.addSphere(color);
+            }
 
             // Update metrics display timer
             metricsPrintTimer += deltaTime;

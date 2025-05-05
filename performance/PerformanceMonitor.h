@@ -45,6 +45,7 @@ public:
         size_t shaderSwitches = 0;    // Number of shader switches
         size_t textureBindings = 0;   // Number of texture bindings
         size_t bufferBindings = 0;    // Number of buffer bindings
+        ::GPUMetrics gpuMetrics;      // GPU-specific metrics
     };
 
     struct RenderPassMetrics {
@@ -85,7 +86,7 @@ public:
     const FrameMetrics& getLatestMetrics() const;
     const std::deque<FrameMetrics>& getMetricsHistory() const;
     const std::vector<RenderPassMetrics>& getRenderPassMetrics() const;
-    // const GPUMonitor::GPUMetrics& getGPUMetrics() const;
+    const ::GPUMetrics& getGPUMetrics() const;
 
     /**
      * @brief Check if GPU monitoring is available
@@ -102,7 +103,7 @@ public:
      */
     void logMetrics() const;
     void logRenderPassMetrics() const;
-    // void logGPUMetrics() const;
+    void logGPUMetrics() const;
 
     ~PerformanceMonitor();
 

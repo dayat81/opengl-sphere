@@ -45,10 +45,46 @@ GPUMonitor::GPUMonitor()
             // Fallback to OpenGL for basic info
             const char* vendor = reinterpret_cast<const char*>(glGetString(GL_VENDOR));
             const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-            if (vendor && renderer) {
+            const char* version = reinterpret_cast<const char*>(glGetString(GL_VERSION));
+            
+            if (vendor && renderer && version) {
                 metrics.vendor = vendor;
                 metrics.gpuName = renderer;
                 available = true;
+                std::cout << "GPU Info:" << std::endl;
+                std::cout << "  Vendor: " << vendor << std::endl;
+                std::cout << "  Renderer: " << renderer << std::endl;
+                std::cout << "  Version: " << version << std::endl;
+
+                // Check for GPU memory info extensions
+                if (metrics.vendor.find("Intel") != std::string::npos) {
+                    std::cout << "  Intel GPU detected" << std::endl;
+                    
+                    // Check for timer query support
+                    if (glewIsSupported("GL_ARB_timer_query")) {
+                        std::cout << "  GL_ARB_timer_query supported - GPU timing available" << std::endl;
+                        GLint queryBits;
+                        glGetQueryiv(GL_TIME_ELAPSED, GL_QUERY_COUNTER_BITS, &queryBits);
+                        std::cout << "  Timer query bits: " << queryBits << std::endl;
+                    }
+                    
+                    // Try to get initial memory info
+                    GLint totalMemoryMB = 0;
+                    glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &totalMemoryMB);
+                    if (totalMemoryMB > 0) {
+                        std::cout << "  Total GPU memory: " << totalMemoryMB << " MB" << std::endl;
+                        metrics.memoryTotalBytes = static_cast<size_t>(totalMemoryMB) * 1024 * 1024;
+                    } else {
+                        std::cout << "  Using default memory size for Intel UHD 630: 1GB" << std::endl;
+                        metrics.memoryTotalBytes = 1073741824; // 1GB
+                    }
+                    
+                    // Initialize metrics with default values
+                    metrics.utilizationPercent = 0.0f;
+                    metrics.memoryUsedBytes = 0;
+                    metrics.temperature = 0.0f;
+                    metrics.powerUsage = 0.0f;
+                }
             }
         }
     }
@@ -162,23 +198,66 @@ bool GPUMonitor::updateMetrics() {
     GLint currentMemoryKB = 0;
     
     // Try to get memory info using GL_NVX_gpu_memory_info for NVIDIA
-    if (metrics.vendor == "NVIDIA") {
-        glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &totalMemoryKB);
-        glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &currentMemoryKB);
-        
-        metrics.memoryTotalBytes = static_cast<size_t>(totalMemoryKB) * 1024;
-        metrics.memoryUsedBytes = static_cast<size_t>(totalMemoryKB - currentMemoryKB) * 1024;
+    if (metrics.vendor.find("NVIDIA") != std::string::npos) {
+        if (glewIsSupported("GL_NVX_gpu_memory_info")) {
+            glGetIntegerv(GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX, &totalMemoryKB);
+            glGetIntegerv(GL_GPU_MEMORY_INFO_CURRENT_AVAILABLE_VIDMEM_NVX, &currentMemoryKB);
+            
+            metrics.memoryTotalBytes = static_cast<size_t>(totalMemoryKB) * 1024;
+            metrics.memoryUsedBytes = static_cast<size_t>(totalMemoryKB - currentMemoryKB) * 1024;
+        }
     }
     // Try to get memory info using GL_ATI_meminfo for AMD
-    else if (metrics.vendor == "AMD") {
-        GLint info[4];
-        glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, info);
+    else if (metrics.vendor.find("AMD") != std::string::npos) {
+        if (glewIsSupported("GL_ATI_meminfo")) {
+            GLint info[4];
+            glGetIntegerv(GL_VBO_FREE_MEMORY_ATI, info);
+            
+            totalMemoryKB = info[0];  // Total memory available
+            currentMemoryKB = info[1]; // Largest available block
+            
+            metrics.memoryTotalBytes = static_cast<size_t>(totalMemoryKB) * 1024;
+            metrics.memoryUsedBytes = static_cast<size_t>(totalMemoryKB - currentMemoryKB) * 1024;
+        }
+    }
+    // Handle Intel GPU metrics
+    else if (metrics.vendor.find("Intel") != std::string::npos) {
+        // For Intel GPUs, we'll use basic OpenGL info and timer queries
+        // Set default memory size for Intel UHD 630
+        metrics.memoryTotalBytes = 1073741824; // 1GB in bytes
         
-        totalMemoryKB = info[0];  // Total memory available
-        currentMemoryKB = info[1]; // Largest available block
-        
-        metrics.memoryTotalBytes = static_cast<size_t>(totalMemoryKB) * 1024;
-        metrics.memoryUsedBytes = static_cast<size_t>(totalMemoryKB - currentMemoryKB) * 1024;
+        // Get GPU utilization through GL timer queries
+        if (glewIsSupported("GL_ARB_timer_query")) {
+            GLuint query;
+            glGenQueries(1, &query);
+            
+            // Start timing
+            glBeginQuery(GL_TIME_ELAPSED, query);
+            // Perform a small GPU operation
+            glFinish();
+            glEndQuery(GL_TIME_ELAPSED);
+            
+            // Wait for the result
+            GLint available = 0;
+            while (!available) {
+                glGetQueryObjectiv(query, GL_QUERY_RESULT_AVAILABLE, &available);
+            }
+            
+            // Get the GPU time
+            GLuint64 gpuTime;
+            glGetQueryObjectui64v(query, GL_QUERY_RESULT, &gpuTime);
+            
+            // Calculate rough GPU utilization based on time spent
+            double timeMs = double(gpuTime) / 1000000.0;
+            float utilization = float(timeMs * 100.0);
+            metrics.utilizationPercent = utilization > 100.0f ? 100.0f : utilization;
+            
+            glDeleteQueries(1, &query);
+        }
+
+        // For Intel GPUs, we can't get accurate memory usage through OpenGL
+        // So we'll estimate based on the total memory
+        metrics.memoryUsedBytes = metrics.memoryTotalBytes / 2; // Rough estimate
     }
 
     // Update performance counters

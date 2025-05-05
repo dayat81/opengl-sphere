@@ -70,6 +70,14 @@ public:
      */
     size_t getActiveObjectCount() const { return spheres.size(); }
 
+    /**
+     * @brief Add a new sphere to the simulation
+     * @param color RGB color of the new sphere
+     */
+    void addSphere(const glm::vec3& color) {
+        spheres.push_back(spawner.createSphere(sphereRadius, color));
+    }
+
 private:
     std::vector<Sphere> spheres;      // Collection of active spheres
     SphereMesh mesh;                  // Shared mesh data for rendering
