@@ -5,20 +5,80 @@
 #include <map>
 #include <GL/glew.h>
 #include <unordered_map>
+#include <memory>
+
+// NVIDIA Management Library types
+typedef void* nvmlDevice_t;
+typedef int nvmlReturn_t;
+#define NVML_SUCCESS 0
+
+// AMD Display Library types
+typedef int ADL_STATUS;
+#define ADL_OK 0
+typedef void* ADL_MAIN_MALLOC_CALLBACK;
+typedef void* ADL_MAIN_FREE_CALLBACK;
+
+// Function pointer types for NVIDIA
+typedef nvmlReturn_t (*NVML_INIT_FUNC)();
+typedef nvmlReturn_t (*NVML_DEVICE_GET_HANDLE_FUNC)(unsigned int, nvmlDevice_t*);
+typedef nvmlReturn_t (*NVML_DEVICE_GET_MEMORY_INFO_FUNC)(nvmlDevice_t, void*);
+typedef nvmlReturn_t (*NVML_DEVICE_GET_UTILIZATION_RATES_FUNC)(nvmlDevice_t, void*);
+typedef nvmlReturn_t (*NVML_DEVICE_GET_NAME_FUNC)(nvmlDevice_t, char*, unsigned int);
+
+// Function pointer types for AMD
+typedef ADL_STATUS (*ADL_MAIN_CONTROL_CREATE_FUNC)(ADL_MAIN_MALLOC_CALLBACK, int);
+typedef ADL_STATUS (*ADL_ADAPTER_NUMBEROFADAPTERS_GET_FUNC)(int*);
+typedef ADL_STATUS (*ADL_ADAPTER_ADAPTERINFO_GET_FUNC)(void*, int);
+typedef ADL_STATUS (*ADL_ADAPTER_MEMORYINFO_GET_FUNC)(int, void*);
+
+// AMD adapter info structure
+struct AdapterInfo {
+    int iSize;
+    int iAdapterIndex;
+    char strUDID[256];
+    int iBusNumber;
+    int iDeviceNumber;
+    int iFunctionNumber;
+    int iVendorID;
+    char strAdapterName[256];
+    char strDisplayName[256];
+    int iPresent;
+    int iExist;
+    char strDriverPath[256];
+    char strDriverPathExt[256];
+    char strPNPString[256];
+    int iOSDisplayIndex;
+};
+
+// Memory info structures
+struct NVMLMemoryInfo {
+    unsigned long long total;
+    unsigned long long free;
+    unsigned long long used;
+};
+
+struct AMDMemoryInfo {
+    int iMemorySize;
+    int iMemoryBandwidth;
+    int iMemoryType;
+};
+
+// GPU metrics structure
+struct GPUMetrics {
+    std::string vendor;
+    std::string gpuName;
+    float utilizationPercent = -1.0f;  // -1 indicates not available
+    size_t memoryUsedBytes = 0;    // GPU memory used in bytes
+    size_t memoryTotalBytes = 0;   // Total GPU memory in bytes
+    float temperature = 0.0f;      // GPU temperature in Celsius
+    float powerUsage = 0.0f;       // GPU power usage in watts
+};
 
 /**
  * @brief GPU monitoring system for collecting GPU metrics
  */
 class GPUMonitor {
 public:
-    struct GPUMetrics {
-        float utilizationPercent = -1.0f;  // -1 indicates not available
-        size_t memoryUsedBytes = 0;    // GPU memory used in bytes
-        size_t memoryTotalBytes = 0;   // Total GPU memory in bytes
-        std::string gpuName;       // GPU device name
-        std::string vendor;        // GPU vendor (NVIDIA, AMD, etc.)
-    };
-
     struct RenderPassMetrics {
         float gpuTime = 0.0f;             // GPU time in milliseconds
         size_t drawCalls = 0;          // Number of draw calls

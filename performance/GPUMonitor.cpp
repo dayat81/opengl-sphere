@@ -1,6 +1,10 @@
 #include "GPUMonitor.h"
 #include <GL/glew.h>
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #include <iostream>
 
 // NVIDIA GPU memory info extension
@@ -126,8 +130,10 @@ void GPUMonitor::resetPerformanceCounters() {
 
 void GPUMonitor::trackDrawCall(size_t vertices, size_t triangles) {
     performanceCounters.drawCalls++;
-    renderPassMetrics[currentPass].vertices += vertices;
-    renderPassMetrics[currentPass].triangles += triangles;
+    if (!currentPass.empty()) {
+        renderPassMetrics[currentPass].vertices += vertices;
+        renderPassMetrics[currentPass].triangles += triangles;
+    }
 }
 
 void GPUMonitor::trackStateChange() {
@@ -197,50 +203,221 @@ void GPUMonitor::updatePerformanceCounters() {
 }
 
 bool GPUMonitor::initNVIDIA() {
-    // Try to load NVIDIA Management Library dynamically
-    void* nvml = dlopen("libnvidia-ml.so", RTLD_NOW);
-    if (!nvml) {
+#ifdef _WIN32
+    // Try to load NVIDIA Management Library
+    driverHandle = LoadLibraryA("nvml.dll");
+    if (!driverHandle) {
         return false;
     }
 
-    // Store handle for cleanup
-    driverHandle = nvml;
-    available = true;
-    metrics.vendor = "NVIDIA";
+    // Get function pointers
+    auto nvmlInit = (NVML_INIT_FUNC)GetProcAddress((HMODULE)driverHandle, "nvmlInit_v2");
+    auto nvmlDeviceGetHandleByIndex = (NVML_DEVICE_GET_HANDLE_FUNC)GetProcAddress((HMODULE)driverHandle, "nvmlDeviceGetHandleByIndex");
+    auto nvmlDeviceGetMemoryInfo = (NVML_DEVICE_GET_MEMORY_INFO_FUNC)GetProcAddress((HMODULE)driverHandle, "nvmlDeviceGetMemoryInfo");
+    auto nvmlDeviceGetUtilizationRates = (NVML_DEVICE_GET_UTILIZATION_RATES_FUNC)GetProcAddress((HMODULE)driverHandle, "nvmlDeviceGetUtilizationRates");
+    auto nvmlDeviceGetName = (NVML_DEVICE_GET_NAME_FUNC)GetProcAddress((HMODULE)driverHandle, "nvmlDeviceGetName");
 
-    // Get GPU name using OpenGL (more reliable than NVML in some cases)
-    const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    if (renderer) {
-        metrics.gpuName = renderer;
+    if (!nvmlInit || !nvmlDeviceGetHandleByIndex || !nvmlDeviceGetMemoryInfo || !nvmlDeviceGetUtilizationRates || !nvmlDeviceGetName) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
     }
 
+    // Initialize NVML
+    if (nvmlInit() != NVML_SUCCESS) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get device handle
+    nvmlDevice_t device;
+    if (nvmlDeviceGetHandleByIndex(0, &device) != NVML_SUCCESS) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get device name
+    char name[256];
+    if (nvmlDeviceGetName(device, name, sizeof(name)) == NVML_SUCCESS) {
+        metrics.gpuName = name;
+    }
+
+    metrics.vendor = "NVIDIA";
+    available = true;
     return true;
+#else
+    // Try to load NVIDIA Management Library dynamically
+    driverHandle = dlopen("libnvidia-ml.so", RTLD_NOW);
+    if (!driverHandle) {
+        return false;
+    }
+
+    // Get function pointers
+    auto nvmlInit = (NVML_INIT_FUNC)dlsym(driverHandle, "nvmlInit_v2");
+    auto nvmlDeviceGetHandleByIndex = (NVML_DEVICE_GET_HANDLE_FUNC)dlsym(driverHandle, "nvmlDeviceGetHandleByIndex");
+    auto nvmlDeviceGetMemoryInfo = (NVML_DEVICE_GET_MEMORY_INFO_FUNC)dlsym(driverHandle, "nvmlDeviceGetMemoryInfo");
+    auto nvmlDeviceGetUtilizationRates = (NVML_DEVICE_GET_UTILIZATION_RATES_FUNC)dlsym(driverHandle, "nvmlDeviceGetUtilizationRates");
+    auto nvmlDeviceGetName = (NVML_DEVICE_GET_NAME_FUNC)dlsym(driverHandle, "nvmlDeviceGetName");
+
+    if (!nvmlInit || !nvmlDeviceGetHandleByIndex || !nvmlDeviceGetMemoryInfo || !nvmlDeviceGetUtilizationRates || !nvmlDeviceGetName) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Initialize NVML
+    if (nvmlInit() != NVML_SUCCESS) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get device handle
+    nvmlDevice_t device;
+    if (nvmlDeviceGetHandleByIndex(0, &device) != NVML_SUCCESS) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get device name
+    char name[256];
+    if (nvmlDeviceGetName(device, name, sizeof(name)) == NVML_SUCCESS) {
+        metrics.gpuName = name;
+    }
+
+    metrics.vendor = "NVIDIA";
+    available = true;
+    return true;
+#endif
 }
 
 bool GPUMonitor::initAMD() {
-    // Try to load AMD Display Library dynamically
-    void* adl = dlopen("libatiadlxx.so", RTLD_NOW);
-    if (!adl) {
+#ifdef _WIN32
+    // Try to load AMD ADL Library
+    driverHandle = LoadLibraryA("atiadlxx.dll");
+    if (!driverHandle) {
         return false;
     }
 
-    // Store handle for cleanup
-    driverHandle = adl;
-    available = true;
-    metrics.vendor = "AMD";
+    // Get function pointers
+    auto ADL_Main_Control_Create = (ADL_MAIN_CONTROL_CREATE_FUNC)GetProcAddress((HMODULE)driverHandle, "ADL_Main_Control_Create");
+    auto ADL_Adapter_NumberOfAdapters_Get = (ADL_ADAPTER_NUMBEROFADAPTERS_GET_FUNC)GetProcAddress((HMODULE)driverHandle, "ADL_Adapter_NumberOfAdapters_Get");
+    auto ADL_Adapter_AdapterInfo_Get = (ADL_ADAPTER_ADAPTERINFO_GET_FUNC)GetProcAddress((HMODULE)driverHandle, "ADL_Adapter_AdapterInfo_Get");
+    auto ADL_Adapter_MemoryInfo_Get = (ADL_ADAPTER_MEMORYINFO_GET_FUNC)GetProcAddress((HMODULE)driverHandle, "ADL_Adapter_MemoryInfo_Get");
 
-    // Get GPU name using OpenGL (more reliable than ADL in some cases)
-    const char* renderer = reinterpret_cast<const char*>(glGetString(GL_RENDERER));
-    if (renderer) {
-        metrics.gpuName = renderer;
+    if (!ADL_Main_Control_Create || !ADL_Adapter_NumberOfAdapters_Get || !ADL_Adapter_AdapterInfo_Get || !ADL_Adapter_MemoryInfo_Get) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
     }
 
-    return true;
+    // Initialize ADL
+    if (ADL_Main_Control_Create(nullptr, 1) != ADL_OK) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get number of adapters
+    int numAdapters = 0;
+    if (ADL_Adapter_NumberOfAdapters_Get(&numAdapters) != ADL_OK || numAdapters <= 0) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get adapter info
+    std::vector<AdapterInfo> adapterInfo(numAdapters);
+    if (ADL_Adapter_AdapterInfo_Get(adapterInfo.data(), sizeof(AdapterInfo) * numAdapters) != ADL_OK) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Find first AMD adapter
+    for (const auto& adapter : adapterInfo) {
+        if (adapter.iVendorID == 0x1002) { // AMD vendor ID
+            metrics.gpuName = adapter.strAdapterName;
+            metrics.vendor = "AMD";
+            available = true;
+            return true;
+        }
+    }
+
+    FreeLibrary((HMODULE)driverHandle);
+    driverHandle = nullptr;
+    return false;
+#else
+    // Try to load AMD ADL Library
+    driverHandle = dlopen("libatiadlxx.so", RTLD_NOW);
+    if (!driverHandle) {
+        return false;
+    }
+
+    // Get function pointers
+    auto ADL_Main_Control_Create = (ADL_MAIN_CONTROL_CREATE_FUNC)dlsym(driverHandle, "ADL_Main_Control_Create");
+    auto ADL_Adapter_NumberOfAdapters_Get = (ADL_ADAPTER_NUMBEROFADAPTERS_GET_FUNC)dlsym(driverHandle, "ADL_Adapter_NumberOfAdapters_Get");
+    auto ADL_Adapter_AdapterInfo_Get = (ADL_ADAPTER_ADAPTERINFO_GET_FUNC)dlsym(driverHandle, "ADL_Adapter_AdapterInfo_Get");
+    auto ADL_Adapter_MemoryInfo_Get = (ADL_ADAPTER_MEMORYINFO_GET_FUNC)dlsym(driverHandle, "ADL_Adapter_MemoryInfo_Get");
+
+    if (!ADL_Main_Control_Create || !ADL_Adapter_NumberOfAdapters_Get || !ADL_Adapter_AdapterInfo_Get || !ADL_Adapter_MemoryInfo_Get) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Initialize ADL
+    if (ADL_Main_Control_Create(nullptr, 1) != ADL_OK) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get number of adapters
+    int numAdapters = 0;
+    if (ADL_Adapter_NumberOfAdapters_Get(&numAdapters) != ADL_OK || numAdapters <= 0) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Get adapter info
+    std::vector<AdapterInfo> adapterInfo(numAdapters);
+    if (ADL_Adapter_AdapterInfo_Get(adapterInfo.data(), sizeof(AdapterInfo) * numAdapters) != ADL_OK) {
+        dlclose(driverHandle);
+        driverHandle = nullptr;
+        return false;
+    }
+
+    // Find first AMD adapter
+    for (const auto& adapter : adapterInfo) {
+        if (adapter.iVendorID == 0x1002) { // AMD vendor ID
+            metrics.gpuName = adapter.strAdapterName;
+            metrics.vendor = "AMD";
+            available = true;
+            return true;
+        }
+    }
+
+    dlclose(driverHandle);
+    driverHandle = nullptr;
+    return false;
+#endif
 }
 
 void GPUMonitor::cleanup() {
+#ifdef _WIN32
+    if (driverHandle) {
+        FreeLibrary((HMODULE)driverHandle);
+        driverHandle = nullptr;
+    }
+#else
     if (driverHandle) {
         dlclose(driverHandle);
         driverHandle = nullptr;
     }
+#endif
 } 

@@ -15,6 +15,11 @@
 
 #include "Debug.h"
 
+// Error callback for GLFW
+static void glfwErrorCallback(int error, const char* description) {
+    std::cerr << "GLFW Error " << error << ": " << description << std::endl;
+}
+
 /**
  * @file Util.h
  * @brief OpenGL initialization and utility functions
@@ -41,37 +46,48 @@
  * @throw runtime_error if window creation fails
  */
 inline GLFWwindow* createWindow(const uint32_t width, const uint32_t height) {
-    // Remember to first initialize GLFW.
-    if (GLFW_TRUE != glfwInit())
+    std::cout << "Setting up GLFW error callback..." << std::endl;
+    glfwSetErrorCallback(glfwErrorCallback);
+
+    std::cout << "Initializing GLFW..." << std::endl;
+    if (GLFW_TRUE != glfwInit()) {
+        std::cerr << "Failed to initialize GLFW" << std::endl;
         throw std::runtime_error("Failed to initialize GLFW");
+    }
+    std::cout << "GLFW initialized successfully" << std::endl;
 
-    // Standard set of window hints, I recommend you use at least OpenGL 4.0+ core.
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_OPENGL_API);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
-
-    // For modern OpenGL, you always want to use a core profile.
-    glfwWindowHint(GLFW_OPENGL_COMPAT_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-    // Technically only needed for Apple.
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-
+    // Configure GLFW
+    std::cout << "Configuring GLFW window hints..." << std::endl;
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
-
-    // Highly recommend you use this.
+    glfwWindowHint(GLFW_SAMPLES, 4); // Enable MSAA
+    glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
+    glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
+    glfwWindowHint(GLFW_DEPTH_BITS, 24);
+    glfwWindowHint(GLFW_STENCIL_BITS, 8);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
 
-    // Creates the window and checks if it succeeded by checking if window is not a nullptr.
-    GLFWwindow* window = glfwCreateWindow(static_cast<int>(width), static_cast<int>(height), "OpenGL Example", nullptr,
-                                          nullptr);
+    // Create window
+    std::cout << "Creating GLFW window..." << std::endl;
+    GLFWwindow* window = glfwCreateWindow(static_cast<int>(width), static_cast<int>(height), "OpenGL Example", nullptr, nullptr);
     if (!window) {
+        std::cerr << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
         throw std::runtime_error("Failed to create GLFW window");
     }
+    std::cout << "GLFW window created successfully" << std::endl;
 
-    // This is needed for OpenGL, this will make the current OpenGL context (which contains the state) the target for
-    // any operations we perform using OpenGL.
+    // Make OpenGL context current
+    std::cout << "Making OpenGL context current..." << std::endl;
     glfwMakeContextCurrent(window);
+    std::cout << "OpenGL context made current" << std::endl;
+
+    // Enable vsync
+    glfwSwapInterval(1);
 
     return window;
 }
@@ -87,7 +103,6 @@ inline GLFWwindow* createWindow(const uint32_t width, const uint32_t height) {
  */
 inline void destroyWindow(GLFWwindow* window) {
     glfwDestroyWindow(window);
-    // Don't forget to call this, it destroys any resources GLFW made.
     glfwTerminate();
 }
 
@@ -102,18 +117,31 @@ inline void destroyWindow(GLFWwindow* window) {
  * @throw runtime_error if GLEW initialization fails
  */
 inline void initGlew() {
-    // Remember to first initialize GLEW. You must always set glewExperimental to true for usage with modern OpenGL.
+    std::cout << "Initializing GLEW..." << std::endl;
     glewExperimental = GL_TRUE;
-    if (const auto& result = glewInit(); GLEW_OK != result)
-        throw std::runtime_error("Failed to initialize GLEW");
+    if (const auto& result = glewInit(); GLEW_OK != result) {
+        std::cerr << "Failed to initialize GLEW: " << glewGetErrorString(result) << std::endl;
+        throw std::runtime_error("Failed to initialize GLEW: " + std::string((const char*)glewGetErrorString(result)));
+    }
+    std::cout << "GLEW initialized successfully" << std::endl;
 
-    // Setup debug messages for OpenGL, this will tell you whenever you fucked up.
+    // Setup debug messages for OpenGL
+    std::cout << "Setting up OpenGL debug output..." << std::endl;
     if (GLEW_ARB_debug_output) {
         glEnable(GL_DEBUG_OUTPUT);
         glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
         glDebugMessageCallback(debugCallback, nullptr);
         glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+        std::cout << "OpenGL debug output enabled" << std::endl;
+    } else {
+        std::cout << "OpenGL debug output not supported" << std::endl;
     }
+
+    // Print OpenGL version info
+    std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
+    std::cout << "GLSL Version: " << glGetString(GL_SHADING_LANGUAGE_VERSION) << std::endl;
+    std::cout << "Vendor: " << glGetString(GL_VENDOR) << std::endl;
+    std::cout << "Renderer: " << glGetString(GL_RENDERER) << std::endl;
 }
 
 /**
@@ -131,24 +159,19 @@ inline void initGlew() {
  * @throw runtime_error if compilation fails
  */
 inline GLuint createShaderModule(const GLenum type, const std::string& source) {
-    // Creates a new shader module.
     const GLuint module = glCreateShader(type);
-
     const auto& src = source.c_str();
-    // This call sets the source code for a shader module.
     glShaderSource(module, 1, &src, nullptr);
-    // This call actually compiles the shader module.
     glCompileShader(module);
 
-    // This code checks for compilation errors. If there were errors, runtime error is thrown with the error message.
     GLint status;
     glGetShaderiv(module, GL_COMPILE_STATUS, &status);
     if (!status) {
         GLint size;
         glGetShaderiv(module, GL_INFO_LOG_LENGTH, &size);
-        char log[size];
-        glGetShaderInfoLog(module, size, nullptr, log);
-        throw std::runtime_error("Failed to compile GL shader module.\n" + std::string(log));
+        std::vector<char> log(size);
+        glGetShaderInfoLog(module, size, nullptr, log.data());
+        throw std::runtime_error("Failed to compile GL shader module.\n" + std::string(log.data()));
     }
 
     return module;
@@ -169,25 +192,19 @@ inline GLuint createShaderModule(const GLenum type, const std::string& source) {
  * @throw runtime_error if linking fails
  */
 inline GLuint linkModules(const GLuint vertexModule, const GLuint fragmentModule) {
-    // Creates a new shader program.
     const GLuint program = glCreateProgram();
-
-    // These calls attach shader modules to a shader program which will be used when linking.
     glAttachShader(program, vertexModule);
     glAttachShader(program, fragmentModule);
-
-    // Links the shader modules together to create a shader program.
     glLinkProgram(program);
 
-    // Same as the code in createShaderModule but checks for linking errors this time.
     int success;
     glGetProgramiv(program, GL_LINK_STATUS, &success);
     if (!success) {
         GLint size;
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &size);
-        char log[size];
-        glGetProgramInfoLog(program, size, nullptr, log);
-        throw std::runtime_error("Failed to link GL shader program.\n" + std::string(log));
+        std::vector<char> log(size);
+        glGetProgramInfoLog(program, size, nullptr, log.data());
+        throw std::runtime_error("Failed to link GL shader program.\n" + std::string(log.data()));
     }
 
     return program;

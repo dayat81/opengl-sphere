@@ -6,7 +6,11 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <mutex>
+#include <memory>
 #include "GPUMonitor.h"
+
+// Forward declarations
+class GPUMonitor;
 
 /**
  * @brief Performance monitoring system for real-time graphics applications
@@ -31,30 +35,30 @@ public:
      * - Render pass metrics: Number of vertices and triangles processed
      */
     struct FrameMetrics {
-        double frameTime;           // Total frame time in milliseconds
-        double cpuTime;            // CPU time in milliseconds
-        double gpuTime;            // GPU time in milliseconds
-        size_t memoryUsage;        // Memory usage in bytes
-        float fps;                 // Frames per second
-        size_t drawCalls;          // Number of draw calls
-        size_t stateChanges;       // Number of state changes
-        size_t shaderSwitches;     // Number of shader program switches
-        size_t textureBindings;    // Number of texture bindings
-        size_t bufferBindings;     // Number of buffer bindings
+        double frameTime = 0.0;        // Frame time in milliseconds
+        double fps = 0.0;             // Frames per second
+        double cpuTime = 0.0;         // CPU time in milliseconds
+        double gpuTime = 0.0;         // GPU time in milliseconds
+        size_t memoryUsage = 0;       // Memory usage in bytes
+        size_t drawCalls = 0;         // Number of draw calls
+        size_t stateChanges = 0;      // Number of state changes
+        size_t shaderSwitches = 0;    // Number of shader switches
+        size_t textureBindings = 0;   // Number of texture bindings
+        size_t bufferBindings = 0;    // Number of buffer bindings
     };
 
     struct RenderPassMetrics {
         std::string name;
-        double gpuTime;            // GPU time in milliseconds
-        size_t vertices;           // Number of vertices processed
-        size_t triangles;          // Number of triangles rendered
+        float gpuTime = 0.0f;
+        size_t vertices = 0;
+        size_t triangles = 0;
     };
 
     /**
      * @brief Constructs a performance monitor
      * @param historySize Number of frames to keep in history for averaging
      */
-    PerformanceMonitor(size_t historySize = 60);
+    explicit PerformanceMonitor(size_t historySize = 60);
     
     /**
      * @brief Frame timing markers
@@ -81,13 +85,13 @@ public:
     const FrameMetrics& getLatestMetrics() const;
     const std::deque<FrameMetrics>& getMetricsHistory() const;
     const std::vector<RenderPassMetrics>& getRenderPassMetrics() const;
-    const GPUMonitor::GPUMetrics& getGPUMetrics() const;
+    // const GPUMonitor::GPUMetrics& getGPUMetrics() const;
 
     /**
      * @brief Check if GPU monitoring is available
      * @return true if GPU monitoring is supported
      */
-    bool isGpuMonitoringAvailable() const { return gpuMonitor.isAvailable(); }
+    bool isGpuMonitoringAvailable() const { return gpuMonitor != nullptr; }
 
     /**
      * @brief Output current performance metrics to console
@@ -98,7 +102,7 @@ public:
      */
     void logMetrics() const;
     void logRenderPassMetrics() const;
-    void logGPUMetrics() const;
+    // void logGPUMetrics() const;
 
     ~PerformanceMonitor();
 
@@ -130,7 +134,7 @@ private:
     float renderTime;
 
     // GPU monitoring
-    GPUMonitor gpuMonitor;
+    std::unique_ptr<GPUMonitor> gpuMonitor;
 
     FrameMetrics currentMetrics;
 

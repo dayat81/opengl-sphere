@@ -7,19 +7,20 @@ project(OpenGL_Example)
 # Instructs the compiler that we are using the C++ 23 standard.
 set(CMAKE_CXX_STANDARD 23)
 
-# This attempts to find the OpenGL library and include directories, so that you can link against and include them.
-# https://cmake.org/cmake/help/latest/module/FindOpenGL.html
+# Add vcpkg toolchain file
+if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
+    set(CMAKE_TOOLCHAIN_FILE "C:/vcpkg/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+endif()
+
+# Set GLEW paths
+set(GLEW_INCLUDE_DIR "C:/vcpkg/installed/x64-windows/include")
+set(GLEW_LIBRARY "C:/vcpkg/installed/x64-windows/lib/glew32.lib")
+set(GLEW_DLL "C:/vcpkg/installed/x64-windows/bin/glew32.dll")
+
+# Find required packages
 find_package(OpenGL REQUIRED)
-
-# Same as above but for glew.
-# https://cmake.org/cmake/help/latest/module/FindGLEW.html
-find_package(GLEW REQUIRED)
-
-# Same as above but for GLFW
-find_package(glfw3 3.3 REQUIRED)
-
-# Same as above but for glm.
-find_package(glm REQUIRED)
+find_package(glfw3 CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
 
 # Find NVML for NVIDIA GPU metrics
 find_library(NVML_LIBRARY nvidia-ml)
@@ -53,22 +54,31 @@ set(SPHERE_SOURCES
     sphere/SphereHandler.h
 )
 
-# This command adds a build target (executable or library, use add_library for libraries).
-# The first word is the name of the executable and everything after that is the source files you want to include in
-# this new target.
+# Add executable
 add_executable(OpenGL_Example main.cpp
-        Util.h
-        Debug.h
-        ${PERFORMANCE_SOURCES}
-        ${SPHERE_SOURCES})
+    Util.h
+    Debug.h
+    ${PERFORMANCE_SOURCES}
+    ${SPHERE_SOURCES}
+)
 
-# This links libraries against a target, the target being the executable we just added.
+# Link libraries
 target_link_libraries(OpenGL_Example 
     OpenGL::GL 
-    GLEW::glew 
-    glfw 
+    ${GLEW_LIBRARY}
+    glfw
     glm::glm
     $<$<BOOL:${NVML_LIBRARY}>:${NVML_LIBRARY}>
     $<$<BOOL:${ADL_LIBRARY}>:${ADL_LIBRARY}>
+)
+
+# Include directories
+target_include_directories(OpenGL_Example PRIVATE ${GLEW_INCLUDE_DIR})
+
+# Copy DLLs to output directory
+add_custom_command(TARGET OpenGL_Example POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    ${GLEW_DLL}
+    $<TARGET_FILE_DIR:OpenGL_Example>
 )
 
