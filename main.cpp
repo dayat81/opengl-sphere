@@ -1,153 +1,234 @@
 /**
- * Going into this, I expect you to have basic knowledge of computer graphics. You should already know what vertices and
- * indices are, as these are the absolute fundamentals for computer graphics. Since these are common concepts talked
- * about in Unity and among game developers in general, this is something you should already be familiar with.
- * If you are not sure what these are, please Google them first!
+ * @file main.cpp
+ * @brief OpenGL-based 3D sphere physics simulation
+ * 
+ * This application demonstrates:
+ * - Modern OpenGL rendering techniques
+ * - Real-time physics simulation
+ * - Performance monitoring
+ * - Object-oriented design patterns
+ * 
+ * The application creates a 3D environment where spheres:
+ * - Spawn at regular intervals
+ * - Fall under gravity
+ * - Bounce off walls and floor
+ * - Render with proper depth and lighting
  */
 
 #include <vector>
 #include <GL/glew.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "Util.h"
+#include "sphere/SphereHandler.h"
+#include "performance/PerformanceMonitor.h"
 
+// Window dimensions for rendering
 constexpr uint32_t width = 720;
-
 constexpr uint32_t height = 480;
 
+/**
+ * @brief Main application entry point
+ * 
+ * Program flow:
+ * 1. Initialize OpenGL context and extensions
+ * 2. Set up rendering state and shaders
+ * 3. Create simulation components
+ * 4. Enter main render loop
+ * 5. Clean up resources
+ * 
+ * @return 0 on successful execution
+ */
 int main() {
+    // Initialize window and OpenGL context
     GLFWwindow* window = createWindow(width, height);
-
     initGlew();
 
-    // Highly recommend you use sRGB, it has been the standard color format
-    // for at least a decade.
+    // Configure OpenGL state
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
     glEnable(GL_FRAMEBUFFER_SRGB);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
 
-    // These two calls should be fairly obvious ;^)
     glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    // The viewport is the area we are rendering to within the image/window.
     glViewport(0, 0, width, height);
 
-    // I don't know how familiar you are with shaders, but we can just gloss over this part for now.
+    // Create and compile shaders
     const GLuint vertexShader = createShaderModule(GL_VERTEX_SHADER, R"(
 #version 450 core
 
+// Vertex attributes and uniforms
 layout(location = 0) in vec3 position;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
 
 void main() {
-    gl_Position = vec4(position, 1.0);
+    // Transform vertex from model space to clip space
+    gl_Position = projection * view * model * vec4(position, 1.0);
 }
 )");
+
     const GLuint fragmentShader = createShaderModule(GL_FRAGMENT_SHADER, R"(
 #version 450 core
 
+// Fragment shader outputs and uniforms
 layout(location = 0) out vec4 color;
+uniform vec3 sphereColor;
 
 void main() {
-    color = vec4(1.0, 0.0, 0.0, 1.0);
+    // Output sphere color with full opacity
+    color = vec4(sphereColor, 1.0);
 }
 )");
 
-    // This creates a shader program and links the modules we just created to it.
+    // Link shader program
     const GLuint shaderProgram = linkModules(vertexShader, fragmentShader);
-
-    // You can destroy the shader modules after linking a shader program, they are no longer needed unless you plan to
-    // re-use them when linking other shader programs.
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    const std::vector<glm::vec3> vertices{
-        {-0.5f, -0.5f, 0.0f},
-        {0.5f, -0.5f, 0.0f},
-        {0.0f, 0.5f, 0.0f}
-    };
+    // Create simulation and monitoring systems
+    SphereHandler sphereHandler;
+    PerformanceMonitor perfMonitor;
 
+    // Create OpenGL buffers and vertex array
     GLuint vertexBuffer;
-    glCreateBuffers(
-        1, // the amount of buffers to create
-        &vertexBuffer // the array (in this case just a pointer to our single buffer) to write said buffer indices to
-    );
+    glCreateBuffers(1, &vertexBuffer);
+    glNamedBufferStorage(vertexBuffer, 
+        sphereHandler.getMesh().getVertices().size() * sizeof(glm::vec3), 
+        sphereHandler.getMesh().getVertices().data(), 
+        0);
 
-    // Uploads our vertex data to the buffer we just created.
-    glNamedBufferStorage(
-        vertexBuffer, // the buffer to upload to
-        3 * sizeof(glm::vec3), // size
-        vertices.data(), // data pointer
-        0 // the flags, just leave blank usually
-    );
+    GLuint indexBuffer;
+    glCreateBuffers(1, &indexBuffer);
+    glNamedBufferStorage(indexBuffer, 
+        sphereHandler.getMesh().getIndices().size() * sizeof(unsigned int), 
+        sphereHandler.getMesh().getIndices().data(), 
+        0);
 
-    // This part is something that trips up beginners quite often. A vertex array object is an object that describes
-    // what data and what layout that data is in within our buffer. We first create one of these VAOs.
-    //
-    // For more details you should reference the LearnOpenGL tutorial chapter, under the Vertex Array Object header.
-    // https://learnopengl.com/Getting-started/Hello-Triangle
     GLuint vertexArrayObject;
     glCreateVertexArrays(1, &vertexArrayObject);
+    glVertexArrayVertexBuffer(vertexArrayObject, 0, vertexBuffer, 0, sizeof(glm::vec3));
+    glVertexArrayElementBuffer(vertexArrayObject, indexBuffer);
+    glVertexArrayAttribFormat(vertexArrayObject, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glEnableVertexArrayAttrib(vertexArrayObject, 0);
+    glVertexArrayAttribBinding(vertexArrayObject, 0, 0);
 
-    // This call binds a buffer, in this case our vertex buffer, to a vertex array object.
-    // The binding, which is NOT the same as a location. A binding specifies the input rate, offset and stride.
-    // Input rate can be per vertex or per object. The offset is the offset into the buffer in bytes where our
-    // data starts. The stride is the size of each element in our buffer in bytes.
-    // https://registry.khronos.org/OpenGL-Refpages/gl4/html/glBindVertexBuffer.xhtml
-    glVertexArrayVertexBuffer(
-        vertexArrayObject, // Vertex array object
-        0, // Binding
-        vertexBuffer, // Buffer
-        0, // Offset in bytes
-        sizeof(glm::vec3) // Stride in bytes
+    // Get uniform locations for shader parameters
+    GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
+    GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
+    GLint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+    GLint colorLoc = glGetUniformLocation(shaderProgram, "sphereColor");
+
+    // Create perspective projection matrix
+    glm::mat4 projection = glm::perspective(
+        glm::radians(45.0f),           // 45-degree field of view
+        static_cast<float>(width) / height,  // Aspect ratio
+        0.1f,                          // Near clip plane
+        100.0f                         // Far clip plane
     );
 
-    // This call defines the format for our vertex array object attribute. This will tell OpenGL what type, size and
-    // offset to use to access this attribute in our buffer.
-    glVertexArrayAttribFormat(
-        vertexArrayObject, // vao
-        0, // attribute index
-        3, // size in whatever type you specify as the next argument.
-        GL_FLOAT, // type of element, float in this case
-        GL_FALSE, // is the element normalized?
-        0 // The offset within this attribute in bytes
+    // Create camera view matrix
+    glm::mat4 view = glm::lookAt(
+        glm::vec3(0.0f, 0.0f, 3.0f),  // Camera position
+        glm::vec3(0.0f, 0.0f, 0.0f),  // Look at point (origin)
+        glm::vec3(0.0f, 1.0f, 0.0f)   // Up vector
     );
 
-    // Enables the vertex array object attribute which we have been setting up at location 0.
-    glEnableVertexArrayAttrib(
-        vertexArrayObject, // vao
-        0 // index
-    );
+    // Initialize timing variables
+    auto lastTime = glfwGetTime();
+    float metricsPrintTimer = 0.0f;
+    const float metricsPrintInterval = 1.0f;  // Print metrics every second
 
-    // This call couples our attribute index to our binding index.
-    glVertexArrayAttribBinding(
-        vertexArrayObject, // vao
-        0, // attribute index
-        0 // binding index
-    );
-
+    // Main render loop
     while (!glfwWindowShouldClose(window)) {
-        // Checks and processes window, keyboard, mouse, etc. events.
+        perfMonitor.beginFrame();
+
+        // Update timing
+        float currentTime = glfwGetTime();
+        float deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        // Update metrics display timer
+        metricsPrintTimer += deltaTime;
+        if (metricsPrintTimer >= metricsPrintInterval) {
+            metricsPrintTimer = 0.0f;
+            perfMonitor.logMetrics();
+        }
+
+        // Update physics simulation
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.beginRenderPass("Physics");
+        }
+        sphereHandler.update(deltaTime);
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.endRenderPass("Physics");
+        }
+
+        // Process window events and clear buffers
         glfwPollEvents();
-
-        // Clears the backbuffer, which is the window surface we are rendering to. This clears to whatever color you
-        // specified as clear color in the glClearColor call. You may always change the clear color by calling it again.
-        glClear(GL_COLOR_BUFFER_BIT);
-
-        // Binds the shader program to our pipeline.
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(shaderProgram);
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.trackShaderSwitch();
+        }
 
-        // Binds our vertex array object, so OpenGL knows the structure of what is in our vertex buffer.
+        // Begin rendering
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.beginRenderPass("Render");
+        }
+
+        // Set camera and projection uniforms
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.trackStateChange(); // for uniform updates
+        }
+
+        // Render all spheres
         glBindVertexArray(vertexArrayObject);
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.trackBufferBinding();
+        }
+        for (const auto& sphere : sphereHandler.getSpheres()) {
+            // Create model matrix for sphere position
+            glm::mat4 model = glm::translate(glm::mat4(1.0f), sphere.getPosition());
+            
+            // Set sphere-specific uniforms
+            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(colorLoc, 1, glm::value_ptr(sphere.getColor()));
+            if (perfMonitor.isGpuMonitoringAvailable()) {
+                perfMonitor.trackStateChange(); // for per-sphere uniform updates
+            }
+            // Draw sphere mesh
+            glDrawElements(GL_TRIANGLES, 
+                         sphereHandler.getMesh().getIndexCount(), 
+                         GL_UNSIGNED_INT, 
+                         0);
+            // Track draw call metrics
+            if (perfMonitor.isGpuMonitoringAvailable()) {
+                perfMonitor.trackDrawCall(
+                    sphereHandler.getMesh().getVertices().size(),
+                    sphereHandler.getMesh().getIndexCount() / 3
+                );
+            }
+        }
 
-        // This is our most basic form of draw calls. This draws the triangle WITHOUT USING AN INDEX BUFFER.
-        // Index buffers are extremely important since they save us memory and are much faster performance wise.
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-
-        // This swaps the back buffer to the window surface, essentially copying the image we were rendering to
-        // to our window so we have an actual output that is on our screen instead of just on the GPU.
+        // End rendering and swap buffers
+        if (perfMonitor.isGpuMonitoringAvailable()) {
+            perfMonitor.endRenderPass("Render");
+        }
         glfwSwapBuffers(window);
+        perfMonitor.endFrame();
     }
 
-    // DON'T FORGET TO DELETE ANY RESOURCES YOU HAVE CREATED!!!!
+    // Cleanup OpenGL resources
     glDeleteVertexArrays(1, &vertexArrayObject);
     glDeleteBuffers(1, &vertexBuffer);
+    glDeleteBuffers(1, &indexBuffer);
     glDeleteProgram(shaderProgram);
     destroyWindow(window);
 
