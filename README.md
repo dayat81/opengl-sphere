@@ -12,6 +12,9 @@ A modern OpenGL application demonstrating real-time physics simulation, 3D rende
 - Elastic collision handling
 - Configurable physics parameters
 - Smooth interpolation
+- Automatic destruction of stationary spheres (velocity < 0.1 units/s)
+- Dynamic sphere spawning with 0.5s cooldown
+- Realistic bounce behavior with energy loss
 
 ### 3D Graphics
 - Modern OpenGL 4.5+ rendering
@@ -83,7 +86,7 @@ cl /EHsc /std:c++17 main.cpp sphere/*.cpp PerformanceMonitor.cpp /I"include" /li
 - ESC: Exit application
 - Space: Pause/Resume simulation
 - R: Reset simulation
-- +/-: Adjust spawn rate
+- +/-: Add new sphere (0.5s cooldown)
 
 ### Configuration
 Key parameters can be adjusted in the code:
@@ -91,6 +94,8 @@ Key parameters can be adjusted in the code:
 // Physics settings
 constexpr float gravity = 9.81f;
 constexpr float bounceFactor = 0.7f;
+constexpr float stationaryThreshold = 0.1f;  // Velocity threshold for stationary spheres
+constexpr float spawnCooldown = 0.5f;       // Time between sphere spawns
 
 // Rendering settings
 constexpr uint32_t width = 720;
@@ -107,12 +112,20 @@ constexpr size_t historySize = 100;
 2. Efficient collision detection
 3. Modern OpenGL best practices
 4. Memory pool for dynamic objects
+5. Automatic cleanup of stationary spheres
+6. Optimized spawn cooldown system
 
 ### Benchmarks
 Tested on reference system (Intel i7, NVIDIA RTX 3070):
 - 100 spheres: 400+ FPS
 - 500 spheres: 200+ FPS
 - 1000 spheres: 100+ FPS
+
+Note: Performance may vary based on:
+- Number of active spheres
+- Collision frequency
+- Spawn rate
+- System specifications
 
 ## Modules
 

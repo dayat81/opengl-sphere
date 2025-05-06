@@ -97,7 +97,10 @@ void SphereHandler::update(float deltaTime) {
         sphere.update(deltaTime, gravity, bounceFactor, floorY);
     }
 
-    // Remove spheres that should be destroyed (stationary or marked for destruction)
+    // Remove spheres that should be destroyed
+    // A sphere is destroyed if:
+    // 1. It is marked for destruction (velocity below threshold)
+    // 2. It is stationary and has experienced at least one collision
     spheres.erase(
         std::remove_if(spheres.begin(), spheres.end(),
             [](const Sphere& sphere) { 
@@ -121,7 +124,11 @@ void SphereHandler::addSphere(const glm::vec3& color) {
         }
     }
     
-    // Add a new sphere at a visible position above the floor
+    // Add a new sphere at a random position within the spawn area
+    // Spawn area parameters:
+    // - X: ±3.0 units from center
+    // - Y: 3.0 to 6.0 units height
+    // - Z: ±3.0 units from center
     std::uniform_real_distribution<float> xDist(-3.0f, 3.0f);    // Even wider range
     std::uniform_real_distribution<float> yDist(3.0f, 6.0f);     // Higher starting position
     std::uniform_real_distribution<float> zDist(-3.0f, 3.0f);    // Even wider range
@@ -130,6 +137,8 @@ void SphereHandler::addSphere(const glm::vec3& color) {
     spheres.emplace_back(position, sphereRadius, color);
     
     // Set initial velocity to make the sphere fall
+    // Initial velocity is set to -2.0 units/s in Y direction
+    // This ensures the sphere starts moving immediately
     spheres.back().setVelocity(glm::vec3(0.0f, -2.0f, 0.0f));  // Initial velocity
     
     // Update last spawn time

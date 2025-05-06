@@ -38,6 +38,10 @@ This module implements a real-time 3D sphere physics simulation system using mod
 - Elastic collisions with boundaries
 - Energy loss through bounce factor
 - Semi-implicit Euler integration
+- Automatic destruction of stationary spheres (velocity < 0.1 units/s)
+- Dynamic sphere spawning with 0.5s cooldown
+- Realistic bounce behavior with energy loss
+- Collision logging and statistics tracking
 
 ### Rendering
 - Modern OpenGL (4.5+) rendering
@@ -81,14 +85,20 @@ while (running) {
 - `gravity`: Acceleration due to gravity (default: 9.81 units/s²)
 - `bounceFactor`: Energy retention in collisions (default: 0.7)
 - `floorY`: Floor plane Y-coordinate (default: -1.0)
+- `stationaryThreshold`: Velocity threshold for considering a sphere stationary (default: 0.1)
+- `spawnCooldown`: Time between sphere spawns (default: 0.5s)
+- `initialVelocity`: Starting velocity for new spheres (default: -2.0 units/s)
 
 ### Mesh Quality
 - `sectors`: Horizontal mesh divisions (default: 16)
 - `stacks`: Vertical mesh divisions (default: 16)
+- `radius`: Sphere radius (default: 0.1 units)
 
 ### Spawn Settings
-- `spawnHeight`: Initial Y position (default: 2.0)
-- `spawnInterval`: Time between spawns (default: 1.0s)
+- `spawnHeight`: Initial Y position (default: 3.0-6.0)
+- `spawnRange`: Initial X/Z position range (default: ±3.0)
+- `spawnCooldown`: Time between spawns (default: 0.5s)
+- `colorRange`: Random color generation range (default: 0.5-1.0)
 
 ## Dependencies
 - GLM (OpenGL Mathematics)
@@ -101,16 +111,22 @@ while (running) {
 - Single shared mesh for all spheres
 - Minimal per-sphere memory footprint
 - Efficient instance rendering
+- Automatic cleanup of stationary spheres
+- Optimized spawn cooldown system
 
 ### CPU Usage
 - Independent physics calculations
 - Optimized collision detection
 - Scalable with sphere count
+- Efficient stationary sphere detection
+- Minimal spawn overhead
 
 ### GPU Usage
 - Shared vertex/index buffers
 - Efficient instanced rendering
 - Minimal state changes
+- Optimized color updates
+- Efficient transform updates
 
 ## Future Improvements
 1. Sphere-to-sphere collisions
@@ -119,6 +135,8 @@ while (running) {
 4. Advanced material properties
 5. Texture support
 6. Custom physics parameters per sphere
+7. Configurable stationary thresholds
+8. Advanced spawn patterns
 
 ## Contributing
 When contributing to this module:

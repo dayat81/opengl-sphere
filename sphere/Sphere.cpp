@@ -77,6 +77,9 @@ void Sphere::update(float deltaTime, float gravity, float bounceFactor, float fl
         collisionCount++;
         
         // Check if sphere is becoming stationary
+        // A sphere is considered stationary when:
+        // 1. All velocity components are below threshold (0.1 units/s)
+        // 2. The sphere is in contact with the floor
         if (std::abs(velocity.y) < 0.1f && std::abs(velocity.x) < 0.1f && std::abs(velocity.z) < 0.1f) {
             velocity = glm::vec3(0.0f);  // Stop the sphere
             stationary = true;
