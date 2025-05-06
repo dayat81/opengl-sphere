@@ -2,10 +2,14 @@
 
 #include <vector>
 #include <random>
+#include <memory>
+#include <fstream>
 #include <glm/glm.hpp>
 #include "Sphere.h"
 #include "SphereMesh.h"
-#include "SphereSpawner.h"
+
+// External declaration of global log file
+extern std::ofstream sphereHandlerLogFile;
 
 /**
  * @brief Central manager for sphere simulation and rendering
@@ -32,7 +36,7 @@ public:
      * 
      * @param sphereRadius Radius for all spheres in the simulation
      */
-    SphereHandler(float sphereRadius = 0.1f);
+    SphereHandler(float sphereRadius = 0.2f);
 
     /**
      * @brief Update all spheres for one time step
@@ -50,13 +54,13 @@ public:
      * @brief Get all active spheres in the simulation
      * @return Const reference to vector of spheres
      */
-    const std::vector<Sphere>& getSpheres() const { return spheres; }
+    const std::vector<Sphere>& getSpheres() const;
 
     /**
      * @brief Get the shared sphere mesh data
      * @return Const reference to sphere mesh
      */
-    const SphereMesh& getMesh() const { return mesh; }
+    const SphereMesh& getMesh() const;
 
     /**
      * @brief Get total number of collisions across all spheres
@@ -74,22 +78,19 @@ public:
      * @brief Add a new sphere to the simulation
      * @param color RGB color of the new sphere
      */
-    void addSphere(const glm::vec3& color) {
-        spheres.push_back(spawner.createSphere(sphereRadius, color));
-    }
+    void addSphere(const glm::vec3& color);
 
 private:
     std::vector<Sphere> spheres;      // Collection of active spheres
     SphereMesh mesh;                  // Shared mesh data for rendering
-    SphereSpawner spawner;            // Handles sphere creation timing
     
     std::random_device rd;            // Hardware random number source
     std::mt19937 gen;                 // Random number generator
     std::uniform_real_distribution<float> colorDist;  // For random colors
 
     // Physics simulation parameters
-    const float gravity;              // Gravity acceleration (units/s²)
-    const float floorY;               // Floor plane Y coordinate
-    const float bounceFactor;         // Energy retention in collisions
-    const float sphereRadius;         // Radius for all spheres
+    float gravity;              // Gravity acceleration (units/s²)
+    float floorY;               // Floor plane Y coordinate
+    float bounceFactor;         // Energy retention in collisions
+    float sphereRadius;         // Radius for all spheres
 }; 

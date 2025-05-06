@@ -56,6 +56,7 @@ set(SPHERE_SOURCES
 
 # Add executable
 add_executable(OpenGL_Example main.cpp
+    LogFiles.cpp
     Util.h
     Debug.h
     ${PERFORMANCE_SOURCES}

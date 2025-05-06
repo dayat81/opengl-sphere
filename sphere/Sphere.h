@@ -1,5 +1,9 @@
 #pragma once
 #include <glm/glm.hpp>
+#include <fstream>
+
+// External declaration of global log file
+extern std::ofstream sphereLogFile;
 
 /**
  * @brief Represents a physical sphere in 3D space
@@ -62,11 +66,20 @@ public:
     float getRadius() const { return radius; }
     int getCollisionCount() const { return collisionCount; }
     void resetCollisionCount() { collisionCount = 0; }
+    const glm::vec3& getVelocity() const { return velocity; }
+    bool isStationaryFor(float time) const { return isStationary && lastMovementTime >= time; }
+    void setVelocity(const glm::vec3& newVelocity) { velocity = newVelocity; }
+    float getLastMovementTime() const { return lastMovementTime; }
+    unsigned int getId() const { return id; }
 
 private:
-    glm::vec3 position;    // Current position in 3D space
-    glm::vec3 velocity;    // Current velocity vector
-    float radius;          // Sphere radius
-    glm::vec3 color;       // RGB color values
-    int collisionCount;    // Number of collisions since last reset
+    static unsigned int nextId;  // Static counter for generating unique IDs
+    unsigned int id;             // Unique identifier for each sphere
+    glm::vec3 position;         // Current position in 3D space
+    glm::vec3 velocity;         // Current velocity vector
+    float radius;               // Sphere radius
+    glm::vec3 color;           // RGB color values
+    int collisionCount;        // Number of collisions since last reset
+    float lastMovementTime;
+    bool isStationary;
 }; 

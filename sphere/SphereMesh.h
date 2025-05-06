@@ -7,6 +7,8 @@
  * 
  * This class handles the generation and storage of sphere geometry:
  * - Vertex positions for the sphere surface
+ * - Vertex normals for lighting calculations
+ * - Texture coordinates for material mapping
  * - Triangle indices for efficient rendering
  * - Configurable resolution (sectors and stacks)
  * 
@@ -37,6 +39,18 @@ public:
     const std::vector<glm::vec3>& getVertices() const { return vertices; }
 
     /**
+     * @brief Get the vertex normals of the sphere mesh
+     * @return Const reference to vector of 3D normal vectors
+     */
+    const std::vector<glm::vec3>& getNormals() const { return normals; }
+
+    /**
+     * @brief Get the texture coordinates of the sphere mesh
+     * @return Const reference to vector of 2D texture coordinates
+     */
+    const std::vector<glm::vec2>& getTexCoords() const { return texCoords; }
+
+    /**
      * @brief Get the triangle indices of the sphere mesh
      * @return Const reference to vector of vertex indices
      */
@@ -64,6 +78,30 @@ private:
     void generateVertices(float radius, int sectors, int stacks);
 
     /**
+     * @brief Generate vertex normals for the sphere
+     * 
+     * Creates normal vectors for each vertex:
+     * - Normals point outward from sphere center
+     * - Normalized for lighting calculations
+     * 
+     * @param sectors Number of horizontal divisions
+     * @param stacks Number of vertical divisions
+     */
+    void generateNormals(int sectors, int stacks);
+
+    /**
+     * @brief Generate texture coordinates for the sphere
+     * 
+     * Creates UV coordinates for each vertex:
+     * - U coordinate wraps around sphere horizontally
+     * - V coordinate goes from top to bottom
+     * 
+     * @param sectors Number of horizontal divisions
+     * @param stacks Number of vertical divisions
+     */
+    void generateTexCoords(int sectors, int stacks);
+
+    /**
      * @brief Generate triangle indices for the sphere
      * 
      * Creates triangles to connect vertices:
@@ -77,5 +115,7 @@ private:
     void generateIndices(int sectors, int stacks);
 
     std::vector<glm::vec3> vertices;      // 3D positions of vertices
+    std::vector<glm::vec3> normals;       // Vertex normal vectors
+    std::vector<glm::vec2> texCoords;     // Texture coordinates
     std::vector<unsigned int> indices;     // Triangle indices
 }; 

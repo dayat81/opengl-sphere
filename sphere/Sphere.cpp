@@ -1,4 +1,8 @@
 #include "Sphere.h"
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <filesystem>
 
 /**
  * @brief Implementation of Sphere physics and collision handling
@@ -6,6 +10,12 @@
  * This file contains the physics simulation logic for individual spheres,
  * including velocity updates, collision detection, and response calculations.
  */
+
+// Initialize static ID counter
+unsigned int Sphere::nextId = 0;
+
+// External declaration of global log file
+extern std::ofstream sphereLogFile;
 
 /**
  * @brief Initialize a sphere with given properties
@@ -19,12 +29,25 @@
  * @note Velocity starts at zero to ensure spheres begin falling from rest
  */
 Sphere::Sphere(const glm::vec3& position, float radius, const glm::vec3& color)
-    : position(position)
-    , velocity(0.0f)
+    : id(nextId++)
+    , position(position)
+    , velocity(glm::vec3(0.0f))
     , radius(radius)
     , color(color)
     , collisionCount(0)
-{}
+    , lastMovementTime(0.0f)
+    , isStationary(false)
+{
+    if (sphereLogFile.is_open()) {
+        sphereLogFile << "\n=== Ball #" << id << " Created ===\n"
+                     << "Position: (" << std::fixed << std::setprecision(2) 
+                     << position.x << ", " << position.y << ", " << position.z << ")\n"
+                     << "Color: (" << color.r << ", " << color.g << ", " << color.b << ")\n"
+                     << "Radius: " << radius << "\n"
+                     << "========================\n" << std::endl;
+        sphereLogFile.flush();
+    }
+}
 
 /**
  * @brief Update sphere physics for one simulation step
@@ -40,14 +63,45 @@ Sphere::Sphere(const glm::vec3& position, float radius, const glm::vec3& color)
  * This provides better stability than explicit Euler
  */
 void Sphere::update(float deltaTime, float gravity, float bounceFactor, float floorY) {
-    // Apply gravity to vertical velocity
+    // Update velocity with gravity
     velocity.y -= gravity * deltaTime;
     
-    // Update position using current velocity
+    // Update position
     position += velocity * deltaTime;
     
-    // Handle any collisions that occurred during movement
+    // Handle collisions
     handleCollisions(bounceFactor, floorY);
+    
+    // Check if sphere is stationary
+    float velocityMagnitude = glm::length(velocity);
+    if (velocityMagnitude < 0.01f) {
+        if (!isStationary) {
+            isStationary = true;
+            lastMovementTime = 0.0f;
+            if (sphereLogFile.is_open()) {
+                sphereLogFile << "\n=== Ball #" << id << " Became Stationary ===\n"
+                            << "Final Position: (" << std::fixed << std::setprecision(2)
+                            << position.x << ", " << position.y << ", " << position.z << ")\n"
+                            << "Total Collisions: " << collisionCount << "\n"
+                            << "================================\n" << std::endl;
+                sphereLogFile.flush();
+            }
+        }
+        lastMovementTime += deltaTime;
+    } else {
+        if (isStationary) {
+            isStationary = false;
+            if (sphereLogFile.is_open()) {
+                sphereLogFile << "\n=== Ball #" << id << " Started Moving ===\n"
+                            << "Position: (" << std::fixed << std::setprecision(2)
+                            << position.x << ", " << position.y << ", " << position.z << ")\n"
+                            << "Velocity: (" << velocity.x << ", " << velocity.y << ", " << velocity.z << ")\n"
+                            << "================================\n" << std::endl;
+                sphereLogFile.flush();
+            }
+        }
+        lastMovementTime = 0.0f;
+    }
 }
 
 /**
@@ -68,41 +122,74 @@ void Sphere::update(float deltaTime, float gravity, float bounceFactor, float fl
  *       More complex physics (friction, etc.) could be added here
  */
 void Sphere::handleCollisions(float bounceFactor, float floorY) {
-    bool hadCollision = false;
-
+    const float wallDistance = 5.0f;  // Distance from center to walls
+    
     // Floor collision
     if (position.y - radius < floorY) {
-        position.y = floorY + radius;  // Move to surface
-        velocity.y = -velocity.y * bounceFactor;  // Reflect with energy loss
-        hadCollision = true;
-    }
-
-    // Left/right wall collisions
-    if (position.x - radius < -1.0f) {
-        position.x = -1.0f + radius;
-        velocity.x = -velocity.x * bounceFactor;
-        hadCollision = true;
-    }
-    if (position.x + radius > 1.0f) {
-        position.x = 1.0f - radius;
-        velocity.x = -velocity.x * bounceFactor;
-        hadCollision = true;
-    }
-
-    // Front/back wall collisions
-    if (position.z - radius < -1.0f) {
-        position.z = -1.0f + radius;
-        velocity.z = -velocity.z * bounceFactor;
-        hadCollision = true;
-    }
-    if (position.z + radius > 1.0f) {
-        position.z = 1.0f - radius;
-        velocity.z = -velocity.z * bounceFactor;
-        hadCollision = true;
-    }
-
-    // Update collision statistics
-    if (hadCollision) {
+        position.y = floorY + radius;
+        velocity.y = -velocity.y * bounceFactor;
         collisionCount++;
+        if (sphereLogFile.is_open()) {
+            sphereLogFile << "\n=== Ball #" << id << " Collision #" << collisionCount << " ===\n"
+                        << "Position: (" << std::fixed << std::setprecision(2)
+                        << position.x << ", " << position.y << ", " << position.z << ")\n"
+                        << "New Velocity: (" << velocity.x << ", " << velocity.y << ", " << velocity.z << ")\n"
+                        << "==============================\n" << std::endl;
+            sphereLogFile.flush();
+        }
+    }
+    
+    // Wall collisions
+    if (position.x - radius < -wallDistance) {
+        position.x = -wallDistance + radius;
+        velocity.x = -velocity.x * bounceFactor;
+        collisionCount++;
+        if (sphereLogFile.is_open()) {
+            sphereLogFile << "\n=== Ball #" << id << " Collision #" << collisionCount << " ===\n"
+                        << "Position: (" << std::fixed << std::setprecision(2)
+                        << position.x << ", " << position.y << ", " << position.z << ")\n"
+                        << "New Velocity: (" << velocity.x << ", " << velocity.y << ", " << velocity.z << ")\n"
+                        << "==============================\n" << std::endl;
+            sphereLogFile.flush();
+        }
+    }
+    if (position.x + radius > wallDistance) {
+        position.x = wallDistance - radius;
+        velocity.x = -velocity.x * bounceFactor;
+        collisionCount++;
+        if (sphereLogFile.is_open()) {
+            sphereLogFile << "\n=== Ball #" << id << " Collision #" << collisionCount << " ===\n"
+                        << "Position: (" << std::fixed << std::setprecision(2)
+                        << position.x << ", " << position.y << ", " << position.z << ")\n"
+                        << "New Velocity: (" << velocity.x << ", " << velocity.y << ", " << velocity.z << ")\n"
+                        << "==============================\n" << std::endl;
+            sphereLogFile.flush();
+        }
+    }
+    if (position.z - radius < -wallDistance) {
+        position.z = -wallDistance + radius;
+        velocity.z = -velocity.z * bounceFactor;
+        collisionCount++;
+        if (sphereLogFile.is_open()) {
+            sphereLogFile << "\n=== Ball #" << id << " Collision #" << collisionCount << " ===\n"
+                        << "Position: (" << std::fixed << std::setprecision(2)
+                        << position.x << ", " << position.y << ", " << position.z << ")\n"
+                        << "New Velocity: (" << velocity.x << ", " << velocity.y << ", " << velocity.z << ")\n"
+                        << "==============================\n" << std::endl;
+            sphereLogFile.flush();
+        }
+    }
+    if (position.z + radius > wallDistance) {
+        position.z = wallDistance - radius;
+        velocity.z = -velocity.z * bounceFactor;
+        collisionCount++;
+        if (sphereLogFile.is_open()) {
+            sphereLogFile << "\n=== Ball #" << id << " Collision #" << collisionCount << " ===\n"
+                        << "Position: (" << std::fixed << std::setprecision(2)
+                        << position.x << ", " << position.y << ", " << position.z << ")\n"
+                        << "New Velocity: (" << velocity.x << ", " << velocity.y << ", " << velocity.z << ")\n"
+                        << "==============================\n" << std::endl;
+            sphereLogFile.flush();
+        }
     }
 } 

@@ -1,4 +1,11 @@
 #include "SphereHandler.h"
+#include <random>
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <fstream>
+#include <filesystem>
+#include <GLFW/glfw3.h>
 
 /**
  * @brief Implementation of central sphere simulation manager
@@ -24,20 +31,41 @@
  * - Bounce: 0.7 (30% energy loss per bounce)
  * - Floor: -1.0 units (below camera view)
  */
-SphereHandler::SphereHandler(float sphereRadius)
-    : mesh(sphereRadius)
-    , spawner(2.0f, 1.0f)
+
+// External declaration of global log file
+extern std::ofstream sphereHandlerLogFile;
+
+// Helper function to format time
+std::string formatTime(float time) {
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2) << time;
+    return ss.str();
+}
+
+// Helper function to format position
+std::string formatPosition(const glm::vec3& pos) {
+    std::stringstream ss;
+    ss << std::fixed << std::setprecision(2) 
+       << "(" << pos.x << ", " << pos.y << ", " << pos.z << ")";
+    return ss.str();
+}
+
+SphereHandler::SphereHandler(float sphereRadius) 
+    : mesh(sphereRadius, 32, 32)
     , gen(rd())
     , colorDist(0.0f, 1.0f)
     , gravity(9.81f)
-    , floorY(-1.0f)
-    , bounceFactor(0.7f)
-    , sphereRadius(sphereRadius)
-{
-    // Create initial set of spheres with random colors
-    for (int i = 0; i < 10; ++i) {
-        glm::vec3 color(colorDist(gen), colorDist(gen), colorDist(gen));
-        spheres.push_back(spawner.createSphere(sphereRadius, color));
+    , floorY(0.0f)
+    , bounceFactor(0.8f)
+    , sphereRadius(sphereRadius) {
+    if (sphereHandlerLogFile.is_open()) {
+        sphereHandlerLogFile << "\n=== SphereHandler Initialized ===\n"
+                           << "Sphere Radius: " << std::fixed << std::setprecision(2) << sphereRadius << "\n"
+                           << "Gravity: " << gravity << "\n"
+                           << "Bounce Factor: " << bounceFactor << "\n"
+                           << "Floor Y: " << floorY << "\n"
+                           << "==============================\n" << std::endl;
+        sphereHandlerLogFile.flush();
     }
 }
 
@@ -57,16 +85,60 @@ SphereHandler::SphereHandler(float sphereRadius)
  *       but could be extended to handle variable time steps
  */
 void SphereHandler::update(float deltaTime) {
-    // Update physics for all spheres
+    static float totalTime = glfwGetTime();
+    
+    // Update all spheres
     for (auto& sphere : spheres) {
         sphere.update(deltaTime, gravity, bounceFactor, floorY);
     }
 
-    // Handle sphere spawning
-    if (spawner.shouldSpawn(deltaTime)) {
-        glm::vec3 color(colorDist(gen), colorDist(gen), colorDist(gen));
-        spheres.push_back(spawner.createSphere(sphereRadius, color));
+    // Remove stationary spheres and log their removal
+    auto it = std::remove_if(spheres.begin(), spheres.end(),
+        [this](const Sphere& sphere) {
+            if (sphere.isStationaryFor(2.0f)) {
+                if (sphereHandlerLogFile.is_open()) {
+                    sphereHandlerLogFile << "\n=== Ball #" << sphere.getId() << " Removed ===\n"
+                                       << "Time: " << formatTime(glfwGetTime()) << "\n"
+                                       << "Final Position: " << formatPosition(sphere.getPosition()) << "\n"
+                                       << "Stationary Duration: " << formatTime(sphere.getLastMovementTime()) << "s\n"
+                                       << "Total Collisions: " << sphere.getCollisionCount() << "\n"
+                                       << "============================\n" << std::endl;
+                    sphereHandlerLogFile.flush();
+                }
+                return true;
+            }
+            return false;
+        }
+    );
+    
+    spheres.erase(it, spheres.end());
+}
+
+void SphereHandler::addSphere(const glm::vec3& color) {
+    // Add a new sphere at a visible position above the floor
+    std::uniform_real_distribution<float> xDist(-1.0f, 1.0f);    // Narrower range
+    std::uniform_real_distribution<float> yDist(3.0f, 4.0f);     // Higher starting position
+    std::uniform_real_distribution<float> zDist(-1.0f, 1.0f);    // Narrower range
+
+    glm::vec3 position(xDist(gen), yDist(gen), zDist(gen));
+    spheres.emplace_back(position, sphereRadius, color);
+    
+    if (sphereHandlerLogFile.is_open()) {
+        sphereHandlerLogFile << "\n=== New Sphere Added ===\n"
+                           << "Position: " << formatPosition(position) << "\n"
+                           << "Color: (" << color.r << ", " << color.g << ", " << color.b << ")\n"
+                           << "Total Spheres: " << spheres.size() << "\n"
+                           << "========================\n" << std::endl;
+        sphereHandlerLogFile.flush();
     }
+}
+
+const std::vector<Sphere>& SphereHandler::getSpheres() const {
+    return spheres;
+}
+
+const SphereMesh& SphereHandler::getMesh() const {
+    return mesh;
 }
 
 /**

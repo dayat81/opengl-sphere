@@ -30,6 +30,8 @@
  */
 SphereMesh::SphereMesh(float radius, int sectors, int stacks) {
     generateVertices(radius, sectors, stacks);
+    generateNormals(sectors, stacks);
+    generateTexCoords(sectors, stacks);
     generateIndices(sectors, stacks);
 }
 
@@ -53,19 +55,44 @@ SphereMesh::SphereMesh(float radius, int sectors, int stacks) {
  */
 void SphereMesh::generateVertices(float radius, int sectors, int stacks) {
     vertices.clear();
-    
-    // Generate vertices from top to bottom
+    vertices.reserve((sectors + 1) * (stacks + 1));
+
+    float sectorStep = 2 * M_PI / sectors;
+    float stackStep = M_PI / stacks;
+
     for (int i = 0; i <= stacks; ++i) {
-        float stackAngle = M_PI / 2 - i * M_PI / stacks;  // Angle from Y axis
-        float xy = radius * cosf(stackAngle);             // Distance from Y axis
-        float z = radius * sinf(stackAngle);              // Height (Y coordinate)
-        
-        // Generate vertices around the stack
+        float stackAngle = M_PI / 2 - i * stackStep;
+        float xy = radius * cosf(stackAngle);
+        float z = radius * sinf(stackAngle);
+
         for (int j = 0; j <= sectors; ++j) {
-            float sectorAngle = j * 2 * M_PI / sectors;   // Angle around Y axis
-            float x = xy * cosf(sectorAngle);             // X coordinate
-            float y = xy * sinf(sectorAngle);             // Z coordinate
+            float sectorAngle = j * sectorStep;
+            float x = xy * cosf(sectorAngle);
+            float y = xy * sinf(sectorAngle);
             vertices.push_back(glm::vec3(x, y, z));
+        }
+    }
+}
+
+void SphereMesh::generateNormals(int sectors, int stacks) {
+    normals.clear();
+    normals.reserve(vertices.size());
+
+    // For a sphere, normals are just normalized vertex positions
+    for (const auto& vertex : vertices) {
+        normals.push_back(glm::normalize(vertex));
+    }
+}
+
+void SphereMesh::generateTexCoords(int sectors, int stacks) {
+    texCoords.clear();
+    texCoords.reserve(vertices.size());
+
+    for (int i = 0; i <= stacks; ++i) {
+        float v = 1.0f - (float)i / stacks;
+        for (int j = 0; j <= sectors; ++j) {
+            float u = (float)j / sectors;
+            texCoords.push_back(glm::vec2(u, v));
         }
     }
 }
@@ -90,22 +117,19 @@ void SphereMesh::generateVertices(float radius, int sectors, int stacks) {
  */
 void SphereMesh::generateIndices(int sectors, int stacks) {
     indices.clear();
-    
-    // Generate triangles for each stack
+    indices.reserve(sectors * stacks * 6);
+
     for (int i = 0; i < stacks; ++i) {
-        int k1 = i * (sectors + 1);      // First vertex in current stack
-        int k2 = k1 + sectors + 1;       // First vertex in next stack
-        
-        // Generate triangles around the stack
+        int k1 = i * (sectors + 1);
+        int k2 = k1 + sectors + 1;
+
         for (int j = 0; j < sectors; ++j, ++k1, ++k2) {
-            // Skip first triangle in bottom stack
             if (i != 0) {
                 indices.push_back(k1);
                 indices.push_back(k2);
                 indices.push_back(k1 + 1);
             }
-            
-            // Skip second triangle in top stack
+
             if (i != (stacks - 1)) {
                 indices.push_back(k1 + 1);
                 indices.push_back(k2);
