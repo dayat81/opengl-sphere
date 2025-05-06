@@ -111,7 +111,7 @@ void SphereHandler::update(float deltaTime) {
 void SphereHandler::addSphere(const glm::vec3& color) {
     static float lastSpawnTime = 0.0f;
     float currentTime = glfwGetTime();
-    const float spawnCooldown = 60.0f;  // 60 seconds (1 minute) between spawns
+    const float spawnCooldown = 0.5f;  // Reduced to 0.5 seconds between spawns
     
     // For the first sphere, don't check cooldown
     if (lastSpawnTime > 0.0f) {
@@ -122,15 +122,15 @@ void SphereHandler::addSphere(const glm::vec3& color) {
     }
     
     // Add a new sphere at a visible position above the floor
-    std::uniform_real_distribution<float> xDist(-1.0f, 1.0f);    // Narrower range
-    std::uniform_real_distribution<float> yDist(5.0f, 6.0f);     // Higher starting position
-    std::uniform_real_distribution<float> zDist(-1.0f, 1.0f);    // Narrower range
+    std::uniform_real_distribution<float> xDist(-3.0f, 3.0f);    // Even wider range
+    std::uniform_real_distribution<float> yDist(3.0f, 6.0f);     // Higher starting position
+    std::uniform_real_distribution<float> zDist(-3.0f, 3.0f);    // Even wider range
 
     glm::vec3 position(xDist(gen), yDist(gen), zDist(gen));
     spheres.emplace_back(position, sphereRadius, color);
     
     // Set initial velocity to make the sphere fall
-    spheres.back().setVelocity(glm::vec3(0.0f, -2.0f, 0.0f));  // Increased initial velocity
+    spheres.back().setVelocity(glm::vec3(0.0f, -2.0f, 0.0f));  // Initial velocity
     
     // Update last spawn time
     lastSpawnTime = currentTime;
