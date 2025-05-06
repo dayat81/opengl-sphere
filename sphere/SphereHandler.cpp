@@ -34,6 +34,7 @@
 
 // External declaration of global log file
 extern std::ofstream sphereHandlerLogFile;
+extern std::ofstream sphereLogFile;
 
 // Helper function to format time
 std::string formatTime(float time) {
@@ -56,14 +57,20 @@ SphereHandler::SphereHandler(float sphereRadius)
     , colorDist(0.0f, 1.0f)
     , gravity(9.81f)
     , floorY(0.0f)
-    , bounceFactor(0.8f)
+    , bounceFactor(0.6f)  // Reduced bounce factor for more realistic bouncing
     , sphereRadius(sphereRadius) {
+    
+    // Create initial sphere with bright orange color
+    glm::vec3 initialColor(1.0f, 0.5f, 0.2f);  // Bright orange
+    addSphere(initialColor);
+    
     if (sphereHandlerLogFile.is_open()) {
         sphereHandlerLogFile << "\n=== SphereHandler Initialized ===\n"
                            << "Sphere Radius: " << std::fixed << std::setprecision(2) << sphereRadius << "\n"
                            << "Gravity: " << gravity << "\n"
                            << "Bounce Factor: " << bounceFactor << "\n"
                            << "Floor Y: " << floorY << "\n"
+                           << "Initial sphere created\n"
                            << "==============================\n" << std::endl;
         sphereHandlerLogFile.flush();
     }
@@ -85,51 +92,69 @@ SphereHandler::SphereHandler(float sphereRadius)
  *       but could be extended to handle variable time steps
  */
 void SphereHandler::update(float deltaTime) {
-    static float totalTime = glfwGetTime();
-    
     // Update all spheres
     for (auto& sphere : spheres) {
         sphere.update(deltaTime, gravity, bounceFactor, floorY);
     }
 
-    // Remove stationary spheres and log their removal
-    auto it = std::remove_if(spheres.begin(), spheres.end(),
-        [this](const Sphere& sphere) {
-            if (sphere.isStationaryFor(2.0f)) {
-                if (sphereHandlerLogFile.is_open()) {
-                    sphereHandlerLogFile << "\n=== Ball #" << sphere.getId() << " Removed ===\n"
-                                       << "Time: " << formatTime(glfwGetTime()) << "\n"
-                                       << "Final Position: " << formatPosition(sphere.getPosition()) << "\n"
-                                       << "Stationary Duration: " << formatTime(sphere.getLastMovementTime()) << "s\n"
-                                       << "Total Collisions: " << sphere.getCollisionCount() << "\n"
-                                       << "============================\n" << std::endl;
-                    sphereHandlerLogFile.flush();
-                }
-                return true;
-            }
-            return false;
-        }
+    // Remove spheres that should be destroyed (stationary or marked for destruction)
+    spheres.erase(
+        std::remove_if(spheres.begin(), spheres.end(),
+            [](const Sphere& sphere) { 
+                return sphere.shouldBeDestroyed() || 
+                       (sphere.isStationary() && sphere.getCollisionCount() > 0); 
+            }),
+        spheres.end()
     );
-    
-    spheres.erase(it, spheres.end());
 }
 
 void SphereHandler::addSphere(const glm::vec3& color) {
+    static float lastSpawnTime = 0.0f;
+    float currentTime = glfwGetTime();
+    const float spawnCooldown = 60.0f;  // 60 seconds (1 minute) between spawns
+    
+    // For the first sphere, don't check cooldown
+    if (lastSpawnTime > 0.0f) {
+        // Check if enough time has passed since last spawn
+        if (currentTime - lastSpawnTime < spawnCooldown) {
+            return;
+        }
+    }
+    
     // Add a new sphere at a visible position above the floor
     std::uniform_real_distribution<float> xDist(-1.0f, 1.0f);    // Narrower range
-    std::uniform_real_distribution<float> yDist(3.0f, 4.0f);     // Higher starting position
+    std::uniform_real_distribution<float> yDist(5.0f, 6.0f);     // Higher starting position
     std::uniform_real_distribution<float> zDist(-1.0f, 1.0f);    // Narrower range
 
     glm::vec3 position(xDist(gen), yDist(gen), zDist(gen));
     spheres.emplace_back(position, sphereRadius, color);
     
+    // Set initial velocity to make the sphere fall
+    spheres.back().setVelocity(glm::vec3(0.0f, -2.0f, 0.0f));  // Increased initial velocity
+    
+    // Update last spawn time
+    lastSpawnTime = currentTime;
+    
+    // Log sphere creation
     if (sphereHandlerLogFile.is_open()) {
         sphereHandlerLogFile << "\n=== New Sphere Added ===\n"
                            << "Position: " << formatPosition(position) << "\n"
                            << "Color: (" << color.r << ", " << color.g << ", " << color.b << ")\n"
                            << "Total Spheres: " << spheres.size() << "\n"
+                           << "Time until next spawn: " << spawnCooldown << " seconds\n"
                            << "========================\n" << std::endl;
         sphereHandlerLogFile.flush();
+    }
+
+    // Also log to sphere lifecycle log
+    if (sphereLogFile.is_open()) {
+        sphereLogFile << "\n=== New Sphere Added ===\n"
+                     << "Position: " << formatPosition(position) << "\n"
+                     << "Color: (" << color.r << ", " << color.g << ", " << color.b << ")\n"
+                     << "Total Spheres: " << spheres.size() << "\n"
+                     << "Time until next spawn: " << spawnCooldown << " seconds\n"
+                     << "========================\n" << std::endl;
+        sphereLogFile.flush();
     }
 }
 

@@ -36,9 +36,9 @@ constexpr uint32_t width = 720;
 constexpr uint32_t height = 480;
 
 // Global log files
-static std::ofstream performanceLogFile;
-static std::ofstream sphereLogFile;
-static std::ofstream sphereHandlerLogFile;
+std::ofstream performanceLogFile;
+std::ofstream sphereLogFile;
+std::ofstream sphereHandlerLogFile;
 
 // Global metrics structure
 struct PerformanceMetrics {
@@ -73,19 +73,32 @@ void initializeLogFiles() {
         // Create logs directory if it doesn't exist
         std::filesystem::create_directories("logs");
 
-        // Open log files in truncation mode
-        performanceLogFile.open("logs/performance.log", std::ios::out | std::ios::trunc);
-        sphereLogFile.open("logs/sphere_lifecycle.log", std::ios::out | std::ios::trunc);
-        sphereHandlerLogFile.open("logs/sphere_handler.log", std::ios::out | std::ios::trunc);
+        // Close any existing open files
+        if (performanceLogFile.is_open()) performanceLogFile.close();
+        if (sphereLogFile.is_open()) sphereLogFile.close();
+        if (sphereHandlerLogFile.is_open()) sphereHandlerLogFile.close();
+
+        // Open log files in append mode to preserve content
+        performanceLogFile.open("logs/performance.log", std::ios::out | std::ios::app);
+        sphereLogFile.open("logs/sphere_lifecycle.log", std::ios::out | std::ios::app);
+        sphereHandlerLogFile.open("logs/sphere_handler.log", std::ios::out | std::ios::app);
 
         if (!performanceLogFile.is_open() || !sphereLogFile.is_open() || !sphereHandlerLogFile.is_open()) {
             throw std::runtime_error("Failed to open one or more log files");
         }
 
         // Write headers to log files
-        performanceLogFile << "=== Performance Log ===\n";
-        sphereLogFile << "=== Sphere Lifecycle Log ===\n";
-        sphereHandlerLogFile << "=== Sphere Handler Log ===\n";
+        performanceLogFile << "\n=== Performance Log ===\n" << std::endl;
+        sphereLogFile << "\n=== Sphere Lifecycle Log ===\n" << std::endl;
+        sphereHandlerLogFile << "\n=== Sphere Handler Log ===\n" << std::endl;
+
+        // Force write to disk
+        performanceLogFile.flush();
+        sphereLogFile.flush();
+        sphereHandlerLogFile.flush();
+
+        std::cout << "Log files initialized successfully" << std::endl;
+        std::cout << "sphereLogFile is " << (sphereLogFile.is_open() ? "open" : "closed") << std::endl;
     }
     catch (const std::exception& e) {
         throw std::runtime_error(std::string("Failed to initialize log files: ") + e.what());
@@ -169,6 +182,7 @@ int main() {
 
         // Initialize log files
         initializeLogFiles();
+        std::cout << "Log files initialized successfully" << std::endl;
 
         // Create window
         GLFWwindow* window = glfwCreateWindow(800, 600, "OpenGL Sphere Simulation", nullptr, nullptr);
@@ -294,6 +308,9 @@ void main() {
         sphereHandler.addSphere(initialColor);
         std::cout << "Initial sphere created" << std::endl;
 
+        // Debug output for sphere count
+        std::cout << "Number of spheres: " << sphereHandler.getSpheres().size() << std::endl;
+
         // Create performance monitor
         PerformanceMonitor perfMonitor;
 
@@ -306,6 +323,21 @@ void main() {
         const auto& vertices = sphereHandler.getMesh().getVertices();
         const auto& normals = sphereHandler.getMesh().getNormals();
         const auto& texCoords = sphereHandler.getMesh().getTexCoords();
+        
+        std::cout << "Mesh data:" << std::endl;
+        std::cout << "Vertices: " << vertices.size() << std::endl;
+        std::cout << "Normals: " << normals.size() << std::endl;
+        std::cout << "TexCoords: " << texCoords.size() << std::endl;
+        std::cout << "Indices: " << sphereHandler.getMesh().getIndices().size() << std::endl;
+
+        // Print first few vertices for verification
+        std::cout << "\nFirst few vertices:" << std::endl;
+        for (size_t i = 0; i < std::min(vertices.size(), size_t(5)); ++i) {
+            std::cout << "Vertex " << i << ": (" 
+                      << vertices[i].x << ", " 
+                      << vertices[i].y << ", " 
+                      << vertices[i].z << ")" << std::endl;
+        }
         
         size_t vertexDataSize = vertices.size() * sizeof(glm::vec3);
         size_t normalDataSize = normals.size() * sizeof(glm::vec3);
@@ -350,11 +382,19 @@ void main() {
         // Unbind VAO to prevent accidental modifications
         glBindVertexArray(0);
 
-        // Get uniform locations for shader parameters
+        // Get uniform locations
         GLint modelLoc = glGetUniformLocation(shaderProgram, "model");
         GLint viewLoc = glGetUniformLocation(shaderProgram, "view");
-        GLint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+        GLint projLoc = glGetUniformLocation(shaderProgram, "projection");
         GLint colorLoc = glGetUniformLocation(shaderProgram, "sphereColor");
+        GLint velocityLoc = glGetUniformLocation(shaderProgram, "velocity");
+
+        std::cout << "\nShader uniform locations:" << std::endl;
+        std::cout << "model: " << modelLoc << std::endl;
+        std::cout << "view: " << viewLoc << std::endl;
+        std::cout << "projection: " << projLoc << std::endl;
+        std::cout << "color: " << colorLoc << std::endl;
+        std::cout << "velocity: " << velocityLoc << std::endl;
 
         // Create perspective projection matrix
         glm::mat4 projection = glm::perspective(
@@ -364,11 +404,11 @@ void main() {
             100.0f                         // Far clip plane
         );
 
-        // Create camera view matrix - moved back and up for better view
+        // Create camera view matrix - adjusted for better view
         glm::mat4 view = glm::lookAt(
-            glm::vec3(0.0f, 2.0f, 8.0f),  // Camera position - moved back and up
-            glm::vec3(0.0f, 0.0f, 0.0f),  // Look at point (origin)
-            glm::vec3(0.0f, 1.0f, 0.0f)   // Up vector
+            glm::vec3(0.0f, 3.0f, 10.0f),  // Camera position - moved further back and up
+            glm::vec3(0.0f, 0.0f, 0.0f),   // Look at point (origin)
+            glm::vec3(0.0f, 1.0f, 0.0f)    // Up vector
         );
 
         // Initialize timing variables
@@ -431,10 +471,10 @@ void main() {
 
             // Set camera and projection uniforms
             glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-            glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+            glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-            // Update view position uniform
-            glm::vec3 viewPos(0.0f, 2.0f, 8.0f);  // Match camera position
+            // Update view position uniform to match camera
+            glm::vec3 viewPos(0.0f, 3.0f, 10.0f);  // Match camera position
             glUniform3fv(glGetUniformLocation(shaderProgram, "viewPos"), 1, glm::value_ptr(viewPos));
 
             // Set brighter light position and properties
@@ -455,11 +495,14 @@ void main() {
 
             // Sort spheres by depth for proper transparency
             std::vector<std::pair<float, const Sphere*>> sortedSpheres;
-            glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);  // Match camera position from view matrix
+            glm::vec3 cameraPos = glm::vec3(0.0f, 3.0f, 10.0f);  // Match camera position
             
             for (const auto& sphere : sphereHandler.getSpheres()) {
                 float distance = glm::length(cameraPos - sphere.getPosition());
                 sortedSpheres.push_back({distance, &sphere});
+                std::cout << "Sphere #" << sphere.getId() 
+                          << " at position (" << sphere.getPosition().x << ", "
+                          << sphere.getPosition().y << ", " << sphere.getPosition().z << ")" << std::endl;
             }
             
             // Sort spheres by distance (back to front)
@@ -478,7 +521,7 @@ void main() {
                 
                 // Calculate velocity magnitude for fade effect
                 float velocityMagnitude = glm::length(sphere->getVelocity());
-                glUniform1f(glGetUniformLocation(shaderProgram, "velocity"), velocityMagnitude);
+                glUniform1f(velocityLoc, velocityMagnitude);
                 
                 if (perfMonitor.isGpuMonitoringAvailable()) {
                     perfMonitor.trackStateChange();
@@ -489,6 +532,8 @@ void main() {
                              sphereHandler.getMesh().getIndices().size(), 
                              GL_UNSIGNED_INT, 
                              0);
+                
+                std::cout << "Rendering sphere #" << sphere->getId() << std::endl;
             }
 
             // End rendering and swap buffers
@@ -508,16 +553,16 @@ void main() {
         glfwTerminate();
 
         // Close log files
-        performanceLogFile.close();
-        sphereLogFile.close();
-        sphereHandlerLogFile.close();
+        if (performanceLogFile.is_open()) performanceLogFile.close();
+        if (sphereLogFile.is_open()) sphereLogFile.close();
+        if (sphereHandlerLogFile.is_open()) sphereHandlerLogFile.close();
 
         return 0;
     } catch (const std::exception& e) {
         // Close log files before throwing
-        performanceLogFile.close();
-        sphereLogFile.close();
-        sphereHandlerLogFile.close();
+        if (performanceLogFile.is_open()) performanceLogFile.close();
+        if (sphereLogFile.is_open()) sphereLogFile.close();
+        if (sphereHandlerLogFile.is_open()) sphereHandlerLogFile.close();
         throw;
     }
 }

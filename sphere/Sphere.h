@@ -67,10 +67,10 @@ public:
     int getCollisionCount() const { return collisionCount; }
     void resetCollisionCount() { collisionCount = 0; }
     const glm::vec3& getVelocity() const { return velocity; }
-    bool isStationaryFor(float time) const { return isStationary && lastMovementTime >= time; }
     void setVelocity(const glm::vec3& newVelocity) { velocity = newVelocity; }
-    float getLastMovementTime() const { return lastMovementTime; }
     unsigned int getId() const { return id; }
+    bool isStationary() const { return stationary; }
+    bool shouldBeDestroyed() const { return shouldDestroy; }
 
 private:
     static unsigned int nextId;  // Static counter for generating unique IDs
@@ -80,6 +80,6 @@ private:
     float radius;               // Sphere radius
     glm::vec3 color;           // RGB color values
     int collisionCount;        // Number of collisions since last reset
-    float lastMovementTime;
-    bool isStationary;
+    bool stationary;
+    bool shouldDestroy;
 }; 
